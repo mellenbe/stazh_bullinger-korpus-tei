@@ -96,11 +96,20 @@ declare function gen:generate-localities-statistics($target as xs:string) {
     let $placeMap :=
         let $allRefs :=
             for $letter in $letters
-            let $id := $letter/tei:TEI/@xml:id/string()
 
             (: Collect places from <correspAction> only (to match case "place" in index.xql) :)
             let $correspRefs := distinct-values(
                 $letter/tei:TEI/tei:teiHeader//tei:correspDesc//tei:correspAction/tei:placeName/@ref/string()
+            )
+
+            (: Collect places of dispatch from <correspAction type="sent">. :)
+            let $sentRefs := distinct-values(
+                $letter/tei:TEI/tei:teiHeader//tei:correspDesc//tei:correspAction[@type = 'sent']/tei:placeName/@ref/string()
+            )
+
+            (: Collect places of receipt from <correspAction type="received">. :)
+            let $receivedRefs := distinct-values(
+                $letter/tei:TEI/tei:teiHeader//tei:correspDesc//tei:correspAction[@type = 'received']/tei:placeName/@ref/string()
             )
 
             (: Collect places from whole document (to match case "mentioned-places" in index.xql) :)
@@ -109,10 +118,12 @@ declare function gen:generate-localities-statistics($target as xs:string) {
             )
             
             return
-                for $ref in distinct-values(($correspRefs, $mentionRefs))
+                for $ref in distinct-values(($correspRefs, $sentRefs, $receivedRefs, $mentionRefs))
                 return map {
                     "place": $ref,
                     "corresp": if ($ref = $correspRefs) then 1 else 0,
+                    "sent": if ($ref = $sentRefs) then 1 else 0,
+                    "received": if ($ref = $receivedRefs) then 1 else 0,
                     "mention": if ($ref = $mentionRefs) then 1 else 0
                 }
 
@@ -125,10 +136,17 @@ declare function gen:generate-localities-statistics($target as xs:string) {
                     let $existing :=
                         if (map:contains($acc, $placeID))
                         then map:get($acc, $placeID)
-                        else map { "corresp": 0, "mentions": 0 }
+                        else map {
+                            "corresp": 0,
+                            "sent": 0,
+                            "received": 0,
+                            "mentions": 0
+                        }
 
                     let $updated := map {
                         "corresp": $existing?corresp + $entry?corresp,
+                        "sent": $existing?sent + $entry?sent,
+                        "received": $existing?received + $entry?received,
                         "mentions": $existing?mentions + $entry?mention
                     }
 
@@ -143,6 +161,8 @@ declare function gen:generate-localities-statistics($target as xs:string) {
         return
             <item xml:id="{$placeID}">
                 <measure type="corresp">{$entry?corresp}</measure>
+                <measure type="sent">{$entry?sent}</measure>
+                <measure type="received">{$entry?received}</measure>
                 <measure type="mentions">{$entry?mentions}</measure>
             </item>
 
